@@ -55,6 +55,9 @@ class PragmaSimdTransformer(PragmaTransformer):
             if not candidate.is_Parallel:
                 continue
 
+            if not IsPerfectIteration(depth=candidates[-2]).visit(candidate):
+                continue
+
             # Add SIMD pragma
             aligned = [j for j in FindSymbols('symbolics').visit(candidate)
                        if j.is_DiscreteFunction]
