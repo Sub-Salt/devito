@@ -66,7 +66,7 @@ def autotune(operator, args, level, mode):
                     i.torank = MPI.PROC_NULL
 
     roots = [operator.body] + [i.root for i in operator._func_table.values()]
-    trees = filter_ordered(retrieve_iteration_tree(roots), key=lambda i: i.root)
+    trees = filter_ordered(retrieve_iteration_tree(roots))
 
     # Detect the time-stepping Iteration; shrink its iteration range so that
     # each autotuning run only takes a few iterations
@@ -89,9 +89,16 @@ def autotune(operator, args, level, mode):
 
     # Perform autotuning
     timings = {}
+    processed = []
     for n, tree in enumerate(trees):
-        blockable = [i.dim for i in tree if not is_integer(i.step)]
 
+        blockable = [i.dim for i in tree if not is_integer(i.step)]
+        # Drop dimensions that have been already tested
+        # Encountered in cases where blockable appear more than once under a tree
+        if all(i in processed for i in blockable):
+            continue
+
+        processed.extend(blockable)
         # Tunable arguments
         try:
             tunable = []
@@ -250,7 +257,9 @@ def finalize_time_bounds(stepper, at_args, args, mode):
 
 
 def calculate_nblocks(tree, blockable):
-    collapsed = tree[:(tree[0].ncollapsed or 1)]
+    block_indices = [n for n, i in enumerate(tree) if i.dim in blockable]
+    index = block_indices[0]
+    collapsed = tree[index:(tree[index].ncollapsed or index+1)]
     blocked = [i.dim for i in collapsed if i.dim in blockable]
     remainders = [(d.root.symbolic_max-d.root.symbolic_min+1) % d.step for d in blocked]
     niters = [d.root.symbolic_max - i for d, i in zip(blocked, remainders)]

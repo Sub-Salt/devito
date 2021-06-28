@@ -97,7 +97,6 @@ def _cse(maybe_exprs, make, mode='default'):
 
     # At this point we may have useless temporaries (e.g., r0=r1). Let's drop them
     processed = _compact_temporaries(processed)
-
     return processed
 
 

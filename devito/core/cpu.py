@@ -6,7 +6,7 @@ from devito.passes.equations import collect_derivatives
 from devito.passes.clusters import (Lift, blocking, buffering, cire, cse,
                                     extract_increments, factorize, fuse, optimize_pows)
 from devito.passes.iet import (CTarget, OmpTarget, avoid_denormals, mpiize,
-                               optimize_halospots, hoist_prodders, relax_incr_dimensions)
+                               optimize_halospots, hoist_prodders, finalize_loop_bounds)
 from devito.tools import timed_pass
 
 __all__ = ['Cpu64NoopCOperator', 'Cpu64NoopOmpOperator', 'Cpu64AdvCOperator',
@@ -80,7 +80,8 @@ class Cpu64OperatorMixin(object):
         # Blocking
         o['blockinner'] = oo.pop('blockinner', False)
         o['blocklevels'] = oo.pop('blocklevels', cls.BLOCK_LEVELS)
-        o['skewing'] = oo.pop('skewing', False)
+        o['wavefront'] = oo.pop('wavefront', False)
+        o['skewing'] = oo.pop('skewing', False) or o['wavefront']
 
         # CIRE
         o['min-storage'] = oo.pop('min-storage', False)
@@ -162,6 +163,11 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cire(clusters, 'invariants', sregistry, options, platform)
         clusters = Lift().process(clusters)
 
+        options['wavefront'] = True
+        options['skewing'] = False
+        options['blocklevels'] = 2
+
+        # import pdb;pdb.set_trace()
         # Blocking to improve data locality
         clusters = blocking(clusters, options)
 
@@ -174,8 +180,16 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         # The previous passes may have created fusion opportunities
         clusters = fuse(clusters)
 
-        # Reduce flops
+        # Reduce flops (no arithmetic alterations)
+        #if not options['wavefront']:
         clusters = cse(clusters, sregistry)
+
+        options['blocklevels'] = 0
+        options['wavefront'] = False
+        options['skewing'] = True
+        #import pdb;pdb.set_trace()
+        # Blocking to improve data locality
+        clusters = blocking(clusters, options)
 
         return clusters
 
@@ -195,7 +209,8 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
             mpiize(graph, mode=options['mpi'])
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
-        relax_incr_dimensions(graph, sregistry=sregistry)
+        import pdb;pdb.set_trace()
+        finalize_loop_bounds(graph)
 
         # Parallelism
         parizer = cls._Target.Parizer(sregistry, options, platform)
@@ -310,7 +325,7 @@ class Cpu64CustomOperator(Cpu64OperatorMixin, CustomOperator):
         return {
             'denormals': avoid_denormals,
             'optcomms': optimize_halospots,
-            'blocking': partial(relax_incr_dimensions, sregistry=sregistry),
+            'blocking': partial(finalize_loop_bounds),
             'parallel': parizer.make_parallel,
             'openmp': parizer.make_parallel,
             'mpi': partial(mpiize, mode=options['mpi']),
