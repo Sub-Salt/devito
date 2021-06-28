@@ -1,10 +1,8 @@
 import cgen
 
 from sympy import Min, Max
-from devito.ir.iet import (Expression, List, Prodder, FindNodes, FindSymbols,
-                           Transformer, filter_iterations,
+from devito.ir.iet import (List, Prodder, FindNodes, Transformer, filter_iterations,
                            retrieve_iteration_tree)
-from devito.ir.support import Forward
 from devito.logger import warning
 from devito.passes.iet.engine import iet_pass
 from devito.tools import split, is_integer

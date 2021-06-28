@@ -163,9 +163,9 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         clusters = cire(clusters, 'invariants', sregistry, options, platform)
         clusters = Lift().process(clusters)
 
+        options['blocklevels'] = 2
         options['wavefront'] = True
         options['skewing'] = False
-        options['blocklevels'] = 2
 
         # import pdb;pdb.set_trace()
         # Blocking to improve data locality
@@ -182,6 +182,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
 
         # Reduce flops (no arithmetic alterations)
         #if not options['wavefront']:
+        import pdb;pdb.set_trace()
         clusters = cse(clusters, sregistry)
 
         options['blocklevels'] = 0
@@ -189,7 +190,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         options['skewing'] = True
         #import pdb;pdb.set_trace()
         # Blocking to improve data locality
-        clusters = blocking(clusters, options)
+        #clusters = blocking(clusters, options)
 
         return clusters
 
