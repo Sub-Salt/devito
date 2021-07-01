@@ -167,7 +167,6 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
         options['wavefront'] = True
         options['skewing'] = False
 
-        # import pdb;pdb.set_trace()
         # Blocking to improve data locality
         clusters = blocking(clusters, options)
 
@@ -182,15 +181,13 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
 
         # Reduce flops (no arithmetic alterations)
         #if not options['wavefront']:
-        import pdb;pdb.set_trace()
         clusters = cse(clusters, sregistry)
 
         options['blocklevels'] = 0
         options['wavefront'] = False
         options['skewing'] = True
-        #import pdb;pdb.set_trace()
         # Blocking to improve data locality
-        #clusters = blocking(clusters, options)
+        clusters = blocking(clusters, options)
 
         return clusters
 
@@ -210,7 +207,7 @@ class Cpu64AdvOperator(Cpu64OperatorMixin, CoreOperator):
             mpiize(graph, mode=options['mpi'])
 
         # Lower IncrDimensions so that blocks of arbitrary shape may be used
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         finalize_loop_bounds(graph)
 
         # Parallelism

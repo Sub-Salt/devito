@@ -266,19 +266,24 @@ def decompose_sequential(ispace, d, block_dims):
             # Make sure IncrDimensions on the same level stick next to each other.
             # For example, we want `(t, xbb, ybb, xb, yb, x, y)`, rather than say
             # `(t, xbb, xb, x, ybb, ...)`
+            # pass
             for bd in block_dims:
-                if level(i.dim) >= level(bd):
-                    relations.append([bd, i.dim])
-                else:
-                    relations.append([i.dim, bd])
+            #    if level(i.dim) >= level(bd):
+                relations.append([bd, i.dim])
+            #    else:
+            #        relations.append([i.dim, bd])
         elif n > ispace.intervals.index(d):
             # The non-Incr subsequent Dimensions must follow the block Dimensions
+            # pass
             for bd in block_dims:
                 relations.append([bd, i.dim])
         else:
             # All other Dimensions must precede the block Dimensions
+            # pass
             for bd in block_dims:
                 relations.append([i.dim, bd])
+
+
     intervals = IntervalGroup(intervals, relations=relations)
 
     sub_iterators = dict(ispace.sub_iterators)
@@ -297,6 +302,7 @@ def decompose_sequential(ispace, d, block_dims):
     directions.update({bd: ispace.directions[d] for bd in block_dims})
 
     return IterationSpace(intervals, sub_iterators, directions)
+
 
 class Skewing(Queue):
 
@@ -344,6 +350,7 @@ class Skewing(Queue):
 
         processed = []
         for c in clusters:
+
             if SKEWABLE not in c.properties[d]:
                 return clusters
 
@@ -358,12 +365,40 @@ class Skewing(Queue):
             # Since we are here, prefix is skewable and nested under a
             # SEQUENTIAL loop.
             intervals = []
+
+            new_relations = []
+
+            # import pdb;pdb.set_trace()
+
+            # The level of a given Dimension in the hierarchy of block Dimensions
+            level = lambda dim: len([i for i in dim._defines if i.is_Incr])
+
+            skew_level = 1
+            # import pdb;pdb.set_trace()
+
+            for i in c.ispace.intervals.relations:
+                if not i:
+                    # import pdb;pdb.set_trace()
+                    continue
+                elif skew_dim is i[0] and level(i[1]) > skew_level:
+                    # import pdb;pdb.set_trace()
+                    new_relations.append(i)
+                elif skew_dim is i[0] and level(i[1]) == skew_level:
+                    # import pdb;pdb.set_trace()
+                    new_relations.append((i[1], skew_dim))
+                else:
+                    # import pdb;pdb.set_trace()
+                    new_relations.append(i)
+
+            # import pdb;pdb.set_trace()
+
             for i in c.ispace:
                 if i.dim is d:
                     intervals.append(Interval(d, skew_dim, skew_dim))
                 else:
                     intervals.append(i)
-            intervals = IntervalGroup(intervals, relations=c.ispace.relations)
+
+            intervals = IntervalGroup(intervals, relations=new_relations)
             ispace = IterationSpace(intervals, c.ispace.sub_iterators,
                                     c.ispace.directions)
 

@@ -76,6 +76,7 @@ def finalize_loop_bounds(iet, **kwargs):
 
     mapper = {}
     for tree in retrieve_iteration_tree(iet):
+        # import pdb;pdb.set_trace()
         iterations = [i for i in tree if i.dim.is_Incr]
         if not iterations:
             continue

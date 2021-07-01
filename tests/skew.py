@@ -1,10 +1,6 @@
-import pytest
-from examples.cfd import plot_field, init_hat
-from sympy import Min, Max
-import numpy as np
 from devito import Grid, Dimension, Eq, Function, TimeFunction, Operator, norm, solve # noqa
 from devito.ir import Expression, Iteration, FindNodes
-from sympy.abc import a
+
 
 from matplotlib.pyplot import pause # noqa
 import matplotlib.pyplot as plt
