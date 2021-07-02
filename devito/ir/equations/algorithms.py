@@ -66,6 +66,7 @@ def dimension_sort(expr):
     implicit_relations.update({tuple(d.root for d in i) for i in relations})
 
     ordering = PartialOrderTuple(extra, relations=(relations | implicit_relations))
+
     return ordering
 
 
