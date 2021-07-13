@@ -180,7 +180,6 @@ def test_cache_blocking_structure_distributed():
     assert 'haloupdate0' in op._func_table
 
     iters = FindNodes(Iteration).visit(op._func_table['compute0'].root)
-
     assert len(iters) == 5
     assert iters[0].dim.parent is x
     assert iters[1].dim.parent is y
