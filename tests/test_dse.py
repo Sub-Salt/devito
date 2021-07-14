@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from cached_property import cached_property
 
-from conftest import skipif, EVAL, _R  # noqa
+from conftest import skipif, EVAL, _R, analyze_blocking  # noqa
 from devito import (NODE, Eq, Inc, Constant, Function, TimeFunction, SparseTimeFunction,  # noqa
                     Dimension, SubDimension, ConditionalDimension, DefaultDimension, Grid,
                     Operator, norm, grad, div, dimensions, switchconfig, configuration,
@@ -1710,11 +1710,9 @@ class TestAliases(object):
         op1 = Operator(eqn, opt=('advanced-fsg', {'openmp': True, 'cire-mingain': 0}))
 
         # Check code generation
-        trees = retrieve_iteration_tree(op1)
-        assert len(trees) == 2  # Expected two separate blocked loop nests
-        assert all(i.dim.is_Incr for i in trees[0][1:5])
-        assert all(i.dim.is_Incr for i in trees[1][1:5])
-        assert trees[0][1] is not trees[1][1]
+        trees = analyze_blocking(op1, ['tx0_blk0y0_blk0xyz', 'tx1_blk0y1_blk0xyz'],
+                                 'tx0_blk0y0_blk0xyzx1_blk0y1_blk0xyz')
+
         xs, ys, zs = self.get_params(op1, 'x_size', 'y_size', 'z_size')
         arrays = [i for i in FindSymbols().visit(trees[0][1]) if i.is_Array]
         assert len(arrays) == 1
@@ -1803,18 +1801,12 @@ class TestAliases(object):
         op = Operator(eqn, subs=grid.spacing_map, openmp=True)
 
         # Check code generation
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 6
-        assert len(trees[0]) == 3
-        assert all(i.dim.is_Incr for i in trees[2][1:5])
-        assert all(i.dim.is_Incr for i in trees[3][1:5])
-        assert all(i.dim.is_Incr for i in trees[4][1:5])
-        assert all(i.dim.is_Incr for i in trees[5][1:5])
-        assert all(i is j for i, j in zip(trees[2][1:3], trees[3][1:3]))
-        assert trees[2][3] is not trees[3][3]
-        assert all(i is j for i, j in zip(trees[3][1:4], trees[4][1:4]))
-        assert trees[3][4] is not trees[4][4]
 
+        trees = retrieve_iteration_tree(op)
+        trees = analyze_blocking(op, ['xyz', 't', 'tx0_blk0y0_blk0xyz',
+                                      'tx0_blk0y0_blk0xyz', 'tx0_blk0y0_blk0xyz',
+                                      'tx0_blk0y0_blk0xyz'],
+                                 'xyztx0_blk0y0_blk0xyzxyzyzz')
         assert op._profiler._sections['section1'].sops == exp_ops
         arrays = [i for i in FindSymbols().visit(trees[2][1]) if i.is_Array]
         assert len(arrays) == 5

@@ -12,6 +12,7 @@ from devito import (Grid, TimeDimension, SteppingDimension, SpaceDimension, # no
 from devito.finite_differences.differentiable import EvalDerivative
 from devito.arch import Device, sniff_mpi_distro
 from devito.arch.compiler import compiler_registry
+from devito.ir.iet import retrieve_iteration_tree, FindNodes, Iteration
 from devito.tools import as_tuple
 
 try:
@@ -204,6 +205,27 @@ def _R(expr):
         assert len(base) == 1
         base = base.pop()
     return EvalDerivative(*expr.args, base=base)
+
+
+# Utilities for testing tree structure
+
+
+def analyze_blocking(op, exp_trees, exp_iters):
+    """
+    Utility function that helps to check loop structure of IETs. Retrieves trees from an
+    Operator and check that blocking structure is as expected. Trees and Iterations are
+    returned for further use in tests.
+    """
+    trees = retrieve_iteration_tree(op)
+    iters = FindNodes(Iteration).visit(op)
+
+    mapper = {'time': 't'}
+    tree_struc = (["".join(mapper.get(i.dim.name, i.dim.name) for i in j) for j in trees])
+    iter_struc = "".join(mapper.get(i.dim.name, i.dim.name) for i in iters)
+
+    assert iter_struc == exp_iters
+    assert tree_struc == exp_trees
+    return trees, iters
 
 
 # A list of optimization options/pipelines to be used in testing
