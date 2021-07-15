@@ -4,7 +4,7 @@ import numpy as np
 from sympy import And
 import pytest
 
-from conftest import skipif, opts_tiling
+from conftest import assert_blocking, skipif, opts_tiling
 from devito import (ConditionalDimension, Grid, Function, TimeFunction, SparseFunction,  # noqa
                     Eq, Operator, Constant, Dimension, SubDimension, switchconfig,
                     SubDomain, Lt, Le, Gt, Ge, Ne, Buffer)
@@ -1058,9 +1058,8 @@ class TestConditionalDimension(object):
         op = Operator(eqns)
 
         # Check code generation
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 1
-        assert all(i.dim.is_Incr for i in trees[0][1:5])
+        trees, _ = assert_blocking(op, ['t,x0_blk0,y0_blk0,x,y,z'],
+                                   't,x0_blk0,y0_blk0,x,y,z')
         exprs = FindNodes(Expression).visit(trees[0][1])
         assert len(exprs) == 4
         assert exprs[1].expr.rhs is exprs[0].output
@@ -1076,12 +1075,9 @@ class TestConditionalDimension(object):
 
         op = Operator(eqns)
         # Check code generation
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 3
-        assert all(i.dim.is_Incr for i in trees[0][1:5])  # 1st set of blocked loops
-        assert len(trees[1]) == 1
-        assert all(i.dim.is_Incr for i in trees[2][1:5])  # 2nd set of blocked loops
-        assert (trees[0][1] is not trees[2][1])  # two different sets of blocked loops
+        trees, _ = assert_blocking(op, ['t,x0_blk0,y0_blk0,x,y,z', 't',
+                                        't,x1_blk0,y1_blk0,x,y,z'],
+                                   't,x0_blk0,y0_blk0,x,y,z,x1_blk0,y1_blk0,x,y,z')
         exprs = FindNodes(Expression).visit(trees[0][1])
         assert len(exprs) == 3
         assert exprs[1].expr.rhs is exprs[0].output
@@ -1112,23 +1108,21 @@ class TestConditionalDimension(object):
                 Eq(g, f + 1)]
 
         op = Operator(eqns)
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 4
         # Check 3 different sets of blocked loops
-        assert trees[0][1] is not trees[2][1]
-        assert trees[0][1] is not trees[3][1]
-        assert trees[2][1] is not trees[3][1]
-        assert all(i.dim.is_Incr for i in trees[0][1:5])
+        trees, _ = assert_blocking(op, ['t,x0_blk0,y0_blk0,x,y,z', 't',
+                                        't,x1_blk0,y1_blk0,x,y,z',
+                                        't,x2_blk0,y2_blk0,x,y,z'],
+                                   't,x0_blk0,y0_blk0,x,y,z,x1_blk0,y1_blk0,x,y,z,'
+                                   'x2_blk0,y2_blk0,x,y,z')
+
         exprs = FindNodes(Expression).visit(trees[0][1])
         assert len(exprs) == 3
         assert exprs[1].expr.rhs is exprs[0].output
         assert exprs[2].expr.rhs is exprs[0].output
 
-        assert all(i.dim.is_Incr for i in trees[2][1:5])
         exprs = FindNodes(Expression).visit(trees[2][1])
         assert len(exprs) == 3
 
-        assert all(i.dim.is_Incr for i in trees[3][1:5])
         exprs = FindNodes(Expression).visit(trees[3][1])
         assert len(exprs) == 3
         assert exprs[1].expr.rhs is exprs[0].output

@@ -210,21 +210,25 @@ def _R(expr):
 # Utilities for testing tree structure
 
 
-def analyze_blocking(op, exp_trees, exp_iters):
+def assert_blocking(operator, exp_trees, exp_iters):
     """
     Utility function that helps to check loop structure of IETs. Retrieves trees from an
     Operator and check that blocking structure is as expected. Trees and Iterations are
     returned for further use in tests.
     """
-    trees = retrieve_iteration_tree(op)
-    iters = FindNodes(Iteration).visit(op)
+    # Preprocess arguments 't,x,y' -> 'txy'
+    exp_iters = exp_iters.replace(',', '')
+    exp_trees = [i.replace(',', '') for i in exp_trees]
+
+    trees = retrieve_iteration_tree(operator)
+    iters = FindNodes(Iteration).visit(operator)
 
     mapper = {'time': 't'}
     tree_struc = (["".join(mapper.get(i.dim.name, i.dim.name) for i in j) for j in trees])
     iter_struc = "".join(mapper.get(i.dim.name, i.dim.name) for i in iters)
-
     assert iter_struc == exp_iters
     assert tree_struc == exp_trees
+
     return trees, iters
 
 

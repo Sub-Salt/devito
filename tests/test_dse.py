@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from cached_property import cached_property
 
-from conftest import skipif, EVAL, _R, analyze_blocking  # noqa
+from conftest import skipif, EVAL, _R, assert_blocking  # noqa
 from devito import (NODE, Eq, Inc, Constant, Function, TimeFunction, SparseTimeFunction,  # noqa
                     Dimension, SubDimension, ConditionalDimension, DefaultDimension, Grid,
                     Operator, norm, grad, div, dimensions, switchconfig, configuration,
@@ -1710,8 +1710,9 @@ class TestAliases(object):
         op1 = Operator(eqn, opt=('advanced-fsg', {'openmp': True, 'cire-mingain': 0}))
 
         # Check code generation
-        trees = analyze_blocking(op1, ['tx0_blk0y0_blk0xyz', 'tx1_blk0y1_blk0xyz'],
-                                 'tx0_blk0y0_blk0xyzx1_blk0y1_blk0xyz')
+        trees, _ = assert_blocking(op1, ['t,x0_blk0,y0_blk0,x,y,z',
+                                         't,x1_blk0,y1_blk0,x,y,z'],
+                                   't,x0_blk0,y0_blk0,x,y,z,x1_blk0,y1_blk0,x,y,z')
 
         xs, ys, zs = self.get_params(op1, 'x_size', 'y_size', 'z_size')
         arrays = [i for i in FindSymbols().visit(trees[0][1]) if i.is_Array]
@@ -1801,12 +1802,11 @@ class TestAliases(object):
         op = Operator(eqn, subs=grid.spacing_map, openmp=True)
 
         # Check code generation
-
-        trees = retrieve_iteration_tree(op)
-        trees = analyze_blocking(op, ['xyz', 't', 'tx0_blk0y0_blk0xyz',
-                                      'tx0_blk0y0_blk0xyz', 'tx0_blk0y0_blk0xyz',
-                                      'tx0_blk0y0_blk0xyz'],
-                                 'xyztx0_blk0y0_blk0xyzxyzyzz')
+        trees, _ = assert_blocking(op, ['x,y,z', 't', 't,x0_blk0,y0_blk0,x,y,z',
+                                        't,x0_blk0,y0_blk0,x,y,z',
+                                        't,x0_blk0,y0_blk0,x,y,z',
+                                        't,x0_blk0,y0_blk0,x,y,z'],
+                                   'x,y,z,t,x0_blk0,y0_blk0,x,y,z,x,y,z,y,z,z')
         assert op._profiler._sections['section1'].sops == exp_ops
         arrays = [i for i in FindSymbols().visit(trees[2][1]) if i.is_Array]
         assert len(arrays) == 5
@@ -2248,7 +2248,6 @@ class TestAliases(object):
         assert len(arrays) == exp_arrays[1]
 
         trees = retrieve_iteration_tree(op3)
-        # import pdb;pdb.set_trace()
         arrays = [i for i in FindSymbols().visit(trees[1][1]) if i.is_Array]
         exp_inv, exp_sops = exp_arrays[2]
         assert len(arrays) == exp_inv + exp_sops
