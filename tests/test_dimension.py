@@ -1185,29 +1185,22 @@ class TestMashup(object):
 
         # Check generated code -- expect the gsave equation to be scheduled together
         # in the same loop nest with the fsave equation
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 4
-        assert all(i.dim.is_Incr for i in trees[0][1:5])  # 1st set of blocked loops
-        assert len(trees[1]) == 1
-        assert all(i.dim.is_Incr for i in trees[2][1:5])  # 2nd set of blocked loops
-        assert all(i.dim.is_Incr for i in trees[3][1:5])  # 3rd set of blocked loops
-        # The 3 loop nests block should be different
-        assert trees[0][1] is not trees[2][1]
-        assert trees[0][1] is not trees[3][1]
-        assert trees[2][1] is not trees[3][1]
+        trees, _ = assert_blocking(op, ['t,x0_blk0,y0_blk0,x,y,z', 't',
+                                        't,x1_blk0,y1_blk0,x,y,z',
+                                        't,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z'],
+                                   't,x0_blk0,y0_blk0,x,y,z,x1_blk0,y1_blk0,x,y,z,'
+                                   'i0x0_blk0,i0y0_blk0,i0x,i0y,i0z')
 
         exprs = FindNodes(Expression).visit(trees[0][1])
         assert len(exprs) == 2
         assert exprs[0].write is f
         assert exprs[1].write is g
 
-        assert all(i.dim.is_Incr for i in trees[2][1:5])
         exprs = FindNodes(Expression).visit(trees[2][1])
         assert len(exprs) == 2
         assert exprs[0].write is fsave
         assert exprs[1].write is gsave
 
-        assert all(i.dim.is_Incr for i in trees[3][1:5])
         exprs = FindNodes(Expression).visit(trees[3][1])
         assert len(exprs) == 1
         assert exprs[0].write is h
@@ -1238,13 +1231,10 @@ class TestMashup(object):
 
         # Check generated code -- expect the gsave equation to be scheduled together
         # in the same loop nest with the fsave equation
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 3
-        assert all(i.dim.is_Incr for i in trees[0][1:5])  # 1st set of blocked loops
-        assert len(trees[1]) == 1
-        assert all(i.dim.is_Incr for i in trees[2][1:5])  # 2nd set of blocked loops
-        # The 2 loop nests block should be different
-        assert trees[0][1] is not trees[2][1]
+        trees, _ = assert_blocking(op, ['t,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z', 't',
+                                        't,x0_blk0,y0_blk0,x,y,z'],
+                                   't,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z,x0_blk0,y0_blk0,x,'
+                                   'y,z')
         assert len(FindNodes(Expression).visit(trees[0][1])) == 3
         exprs = FindNodes(Expression).visit(trees[2][1])
         assert len(exprs) == 2
@@ -1277,15 +1267,12 @@ class TestMashup(object):
 
         # Check generated code -- expect the gsave equation to be scheduled together
         # in the same loop nest with the fsave equation
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 5
-        # The 3 loop nests block should be different
-        assert all(i.dim.is_Incr for i in trees[0][1:5])
-        assert all(i.dim.is_Incr for i in trees[2][1:5])
-        assert all(i.dim.is_Incr for i in trees[4][1:5])
-        assert trees[0][1] is not trees[2][1]
-        assert trees[0][1] is not trees[4][1]
-        assert trees[2][1] is not trees[4][1]
+        trees, _ = assert_blocking(op, ['t,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z', 't',
+                                        't,x0_blk0,y0_blk0,x,y,z',
+                                        't,i0x1_blk0,i0y1_blk0,i0x,i0y,i0z',
+                                        't,i0x1_blk0,i0y1_blk0,i0x,i0y,i0z'],
+                                   't,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z,x0_blk0,y0_blk0,x,'
+                                   'y,z,i0x1_blk0,i0y1_blk0,i0x,i0y,i0z,i0x,i0y,i0z')
 
         exprs = FindNodes(Expression).visit(trees[0][1])
         assert len(exprs) == 2
