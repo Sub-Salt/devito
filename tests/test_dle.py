@@ -4,7 +4,7 @@ from operator import mul
 import numpy as np
 import pytest
 
-from conftest import _R
+from conftest import assert_blocking, _R
 from devito import (Grid, Function, TimeFunction, SparseTimeFunction, SpaceDimension,
                     Dimension, SubDimension, Eq, Inc, Operator, info, norm)
 from devito.exceptions import InvalidArgument
@@ -90,6 +90,7 @@ def test_cache_blocking_structure(blockinner, exp_iters):
     _, op = _new_operator2((10, 31, 45), time_order=2,
                            opt=('blocking', {'blockinner': blockinner,
                                              'par-collapse-ncores': 1}))
+
     trees = retrieve_iteration_tree(op)
     assert len(trees) == 1
     tree = trees[0]
@@ -105,6 +106,7 @@ def test_cache_blocking_structure(blockinner, exp_iters):
                            opt=('blocking', {'openmp': True,
                                              'blockinner': blockinner,
                                              'par-collapse-ncores': 1}))
+
     trees = retrieve_iteration_tree(op)
     assert len(trees) == 1
     tree = trees[0]
@@ -136,17 +138,8 @@ def test_cache_blocking_structure_subdims():
 
     # Non-local SubDimension -> blocking expected
     op = Operator(Eq(f.forward, f + 1, subdomain=grid.interior))
-    trees = retrieve_iteration_tree(op)
-    assert len(trees) == 1
-    tree = trees[0]
-    assert len(tree) == 6
-    assert tree[1].dim.is_Incr and tree[1].dim.parent is xi and tree[1].dim.root is x
-    assert tree[2].dim.is_Incr and tree[2].dim.parent is yi and tree[2].dim.root is y
-    assert tree[3].dim.is_Incr and tree[3].dim.parent is tree[1].dim and\
-        tree[3].dim.root is x
-    assert tree[4].dim.is_Incr and tree[4].dim.parent is tree[2].dim and\
-        tree[4].dim.root is y
-    assert not tree[5].dim.is_Incr and tree[5].dim is zi and tree[5].dim.parent is z
+    trees, _ = assert_blocking(op, ['t,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z'],
+                               't,i0x0_blk0,i0y0_blk0,i0x,i0y,i0z')
 
 
 @pytest.mark.parallel(mode=[(1, 'full')])  # Shortcut to put loops in nested efuncs
@@ -168,16 +161,6 @@ def test_cache_blocking_structure_distributed():
     eqns += [Eq(U.forward, U.dx + u.forward)]
 
     op = Operator(eqns)
-
-    assert len(op._func_table) == 7
-    # Check efuncs are generated
-    assert 'gather0' in op._func_table
-    assert 'scatter0' in op._func_table
-    assert 'pokempi0' in op._func_table
-    assert 'compute0' in op._func_table
-    assert 'halowait0' in op._func_table
-    assert 'remainder0' in op._func_table
-    assert 'haloupdate0' in op._func_table
 
     iters = FindNodes(Iteration).visit(op._func_table['compute0'].root)
     assert len(iters) == 5
@@ -489,9 +472,8 @@ class TestNodeParallelism(object):
             op = Operator(eqns, opt=('blocking', 'simd', 'openmp',
                                      {'blockinner': True, 'par-collapse-ncores': 1,
                                       'par-collapse-work': 0}))
-            iterations = FindNodes(Iteration).visit(op)
-            assert len(retrieve_iteration_tree(op)) == 1
-            assert all(i.dim.is_Incr for i in iterations[1:5])
+            trees, iterations = assert_blocking(op, ['t,x0_blk0,y0_blk0,z0_blk0,x,y,z'],
+                                                't,x0_blk0,y0_blk0,z0_blk0,x,y,z')
         else:
             op = Operator(eqns, opt=('simd', 'openmp', {'par-collapse-ncores': 1,
                                                         'par-collapse-work': 0}))
@@ -534,8 +516,7 @@ class TestNodeParallelism(object):
 
         op = Operator(eq, opt=('advanced', {'openmp': True}))
 
-        iterations = FindNodes(Iteration).visit(op)
-        assert len(iterations) == 4
+        _, iterations = assert_blocking(op, ['co,ci,x,y'], 'co,ci,x,y')
         assert iterations[0].ncollapsed == 1
         assert iterations[1].is_Vectorized
         assert iterations[2].is_Sequential
@@ -645,9 +626,8 @@ class TestNestedParallelism(object):
         assert np.all(u.data[0] == 10)
         assert op.arguments(t_M=9, nthreads_nested=2)['nthreads_nested'] == 2
 
-        iterations = FindNodes(Iteration).visit(op)
-        assert len(retrieve_iteration_tree(op)) == 1
-        assert all(i.dim.is_Incr for i in iterations[1:5])
+        _, iterations = assert_blocking(op, ['t,x0_blk0,y0_blk0,x,y,z'],
+                                        't,x0_blk0,y0_blk0,x,y,z')
         assert iterations[1].pragmas[0].value == 'omp for collapse(1) schedule(dynamic,1)'
         assert iterations[3].pragmas[0].value == ('omp parallel for collapse(1) '
                                                   'schedule(dynamic,1) '
@@ -671,11 +651,11 @@ class TestNestedParallelism(object):
         op.apply(t_M=9)
         assert np.all(u.data[0] == 10)
 
-        trees = retrieve_iteration_tree(op)
-        assert all(i.dim.is_Incr for i in trees[0][1:5])
-        iterations = FindNodes(Iteration).visit(trees[0][1])
-        assert iterations[0].pragmas[0].value == 'omp for collapse(2) schedule(dynamic,1)'
-        assert iterations[2].pragmas[0].value == ('omp parallel for collapse(2) '
+        _, iterations = assert_blocking(op, ['t,x0_blk0,y0_blk0,x,y,z'],
+                                        't,x0_blk0,y0_blk0,x,y,z')
+
+        assert iterations[1].pragmas[0].value == 'omp for collapse(2) schedule(dynamic,1)'
+        assert iterations[3].pragmas[0].value == ('omp parallel for collapse(2) '
                                                   'schedule(dynamic,1) '
                                                   'num_threads(nthreads_nested)')
 
@@ -695,11 +675,9 @@ class TestNestedParallelism(object):
                                              'par-collapse-ncores': 1,
                                              'par-dynamic-work': 0}))
 
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 3
-        assert all(i is j for i, j in zip(trees[1][0:3], trees[2][0:3]))
-        assert all(i.dim.is_Incr and j.dim.is_Incr for i, j in
-                   zip(trees[1][1:5], trees[2][1:5]))
+        trees, _ = assert_blocking(op, ['t', 't,x0_blk0,y0_blk0,x,y,z',
+                                        't,x0_blk0,y0_blk0,x,y,z'],
+                                   't,x0_blk0,y0_blk0,x,y,z,x,y,z')
         assert trees[1][1].pragmas[0].value ==\
             'omp for collapse(2) schedule(dynamic,1)'
         assert trees[2][1].pragmas[0].value ==\
@@ -732,12 +710,9 @@ class TestNestedParallelism(object):
                                              'par-collapse-ncores': 1,
                                              'par-dynamic-work': 0}))
 
-        trees = retrieve_iteration_tree(op)
-        assert len(trees) == 3
-        assert len(trees[0]) == 1
-        assert all(i.dim.is_Incr for i in trees[1][1:4])
-        assert all(i.dim.is_Incr for i in trees[2][1:5])
-        assert trees[1][1] is trees[2][1]
+        trees, _ = assert_blocking(op, ['t', 't,x0_blk0,y0_blk0,x,x,x,y,z',
+                                        't,x0_blk0,y0_blk0,x,y,z'],
+                                   't,x0_blk0,y0_blk0,x,x,x,y,z,y,z')
         assert trees[1][1].pragmas[0].value ==\
             'omp for collapse(2) schedule(dynamic,1)'
         assert not trees[1][2].pragmas
@@ -778,7 +753,6 @@ class TestNestedParallelism(object):
         assert len(trees) == 1
         tree = trees[0]
         assert len(tree) == 6 + (blocklevels - 1) * 2
-
         assert tree[1].dim.is_Incr and tree[1].dim.parent is xi and tree[1].dim.root is x
         assert tree[2].dim.is_Incr and tree[2].dim.parent is yi and tree[2].dim.root is y
         assert tree[3].dim.is_Incr and tree[3].dim.parent is tree[1].dim and\
@@ -804,8 +778,6 @@ class TestNestedParallelism(object):
         assert trees[0][3].pragmas[0].value == ('omp parallel for collapse(2) '
                                                 'schedule(dynamic,1) '
                                                 'num_threads(nthreads_nested)')
-        iterations = FindNodes(Iteration).visit(op)
-        assert all(i.dim.is_Incr for i in iterations[1: 2 + (blocklevels * 2)])
 
     @pytest.mark.parametrize('exprs,collapsed,scheduling', [
         (['Eq(u.forward, u + 2)'], '2', 'static'),
